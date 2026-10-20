@@ -14,6 +14,12 @@ java {
 	}
 }
 
+// Patch releases newer than what Boot 3.5.16 manages, to fix CVEs found by Trivy (see README).
+// Drop each override once a Boot release ships at or above that version.
+extra["tomcat.version"] = "10.1.61"
+extra["jackson-bom.version"] = "2.21.8"
+extra["postgresql.version"] = "42.7.14"
+
 repositories {
 	mavenCentral()
 }
@@ -28,6 +34,8 @@ dependencies {
 	implementation("org.flywaydb:flyway-core")
 	implementation("org.flywaydb:flyway-database-postgresql")
 	runtimeOnly("org.postgresql:postgresql")
+	// Pulled in by kafka-clients, which Boot does not manage for lz4.
+	runtimeOnly("at.yawk.lz4:lz4-java:1.11.4")
 	runtimeOnly("io.micrometer:micrometer-registry-prometheus")
 
 	testImplementation("org.springframework.boot:spring-boot-starter-test")
