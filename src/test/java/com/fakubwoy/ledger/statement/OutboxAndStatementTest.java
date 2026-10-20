@@ -7,6 +7,7 @@ import com.fakubwoy.ledger.TestcontainersConfiguration;
 import com.fakubwoy.ledger.account.AccountController.AccountResponse;
 import com.fakubwoy.ledger.outbox.OutboxRepository;
 import com.fakubwoy.ledger.statement.StatementController.StatementLine;
+import com.fakubwoy.ledger.statement.StatementController.StatementPage;
 import com.fakubwoy.ledger.transfer.LedgerTransaction.Type;
 import com.fakubwoy.ledger.transfer.TransferCompleted;
 import com.fakubwoy.ledger.transfer.TransferService.Posted;
@@ -21,9 +22,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.context.annotation.Import;
-import org.springframework.core.ParameterizedTypeReference;
-import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 
 @Import(TestcontainersConfiguration.class)
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
@@ -88,10 +88,32 @@ class OutboxAndStatementTest {
 		assertThat(statement(b)).singleElement().extracting(StatementLine::amount).isEqualTo(700L);
 	}
 
+	@Test
+	void statementIsPaginatedNewestFirst() {
+		var account = createAccount();
+		for (int amount = 1; amount <= 5; amount++) {
+			deposit(account, amount);
+		}
+		await().atMost(Duration.ofSeconds(15)).until(() -> statement(account).size() == 5);
+
+		var first = page(account, 0, 2).getBody();
+		var last = page(account, 2, 2).getBody();
+
+		assertThat(first.items()).extracting(StatementLine::amount).containsExactly(5L, 4L);
+		assertThat(first.hasNext()).isTrue();
+		assertThat(last.items()).extracting(StatementLine::amount).containsExactly(1L);
+		assertThat(last.hasNext()).isFalse();
+		assertThat(rest.getForEntity("/accounts/" + account + "/statement?size=101", String.class).getStatusCode())
+				.isEqualTo(HttpStatus.BAD_REQUEST);
+	}
+
 	private List<StatementLine> statement(UUID account) {
-		return rest.exchange("/accounts/" + account + "/statement", HttpMethod.GET, null,
-				new ParameterizedTypeReference<List<StatementLine>>() {
-				}).getBody();
+		return page(account, 0, 100).getBody().items();
+	}
+
+	private ResponseEntity<StatementPage> page(UUID account, int page, int size) {
+		return rest.getForEntity("/accounts/%s/statement?page=%d&size=%d".formatted(account, page, size),
+				StatementPage.class);
 	}
 
 	private UUID createAccount() {

@@ -7,10 +7,13 @@ import com.fakubwoy.ledger.outbox.OutboxRepository;
 import com.fakubwoy.ledger.transfer.LedgerTransaction.Type;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,19 +21,23 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class TransferService {
 
+	private static final Logger log = LoggerFactory.getLogger(TransferService.class);
+
 	private final AccountRepository accounts;
 	private final LedgerTransactionRepository transactions;
 	private final EntryRepository entries;
 	private final OutboxRepository outbox;
 	private final ObjectMapper json;
+	private final MeterRegistry meters;
 
 	public TransferService(AccountRepository accounts, LedgerTransactionRepository transactions, EntryRepository entries,
-			OutboxRepository outbox, ObjectMapper json) {
+			OutboxRepository outbox, ObjectMapper json, MeterRegistry meters) {
 		this.accounts = accounts;
 		this.transactions = transactions;
 		this.entries = entries;
 		this.outbox = outbox;
 		this.json = json;
+		this.meters = meters;
 	}
 
 	public record Posted(UUID transactionId, Type type, UUID fromAccountId, UUID toAccountId, long amount,
@@ -82,6 +89,9 @@ public class TransferService {
 		// Same DB transaction as the entries: the event exists if and only if the money moved.
 		var event = new TransferCompleted(tx.getId(), type, fromId, toId, amount, currency, tx.getCreatedAt());
 		outbox.save(new OutboxMessage(tx.getId(), write(event)));
+		// ponytail: counted before commit, so a rare commit failure over-counts by one; fine for dashboards.
+		meters.counter("ledger.transactions.posted", "type", type.name()).increment();
+		log.info("Posted {} {} {} from {} to {}", type, amount, currency, fromId, toId);
 		return new Posted(tx.getId(), type, fromId, toId, amount, currency, tx.getCreatedAt());
 	}
 

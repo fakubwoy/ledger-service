@@ -28,4 +28,10 @@ management:
   endpoints:
     web:
       exposure:
-        include: health
+        include: health, prometheus
+
+logging:
+  structured:
+    format:
+      # One JSON object per line (Elastic Common Schema); MDC values like requestId become fields.
+      console: ecs
