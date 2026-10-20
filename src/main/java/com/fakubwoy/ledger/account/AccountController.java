@@ -4,6 +4,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
+import com.fakubwoy.ledger.transfer.EntryRepository;
 import java.net.URI;
 import java.time.Instant;
 import java.util.Currency;
@@ -23,22 +24,24 @@ import org.springframework.web.server.ResponseStatusException;
 public class AccountController {
 
 	private final AccountRepository accounts;
+	private final EntryRepository entries;
 
-	public AccountController(AccountRepository accounts) {
+	public AccountController(AccountRepository accounts, EntryRepository entries) {
 		this.accounts = accounts;
+		this.entries = entries;
 	}
 
 	@PostMapping
 	public ResponseEntity<AccountResponse> create(@Valid @RequestBody CreateAccountRequest request) {
 		var account = accounts.save(new Account(request.owner(), request.currency()));
 		return ResponseEntity.created(URI.create("/accounts/" + account.getId()))
-				.body(AccountResponse.from(account));
+				.body(AccountResponse.from(account, 0));
 	}
 
 	@GetMapping("/{id}")
 	public AccountResponse get(@PathVariable UUID id) {
 		return accounts.findById(id)
-				.map(AccountResponse::from)
+				.map(a -> AccountResponse.from(a, entries.balanceOf(id)))
 				.orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Account " + id + " not found"));
 	}
 
@@ -51,10 +54,11 @@ public class AccountController {
 		}
 	}
 
-	public record AccountResponse(UUID id, String owner, String currency, Instant createdAt) {
+	// balance is in minor units and derived from the sum of entries.
+	public record AccountResponse(UUID id, String owner, String currency, long balance, Instant createdAt) {
 
-		static AccountResponse from(Account a) {
-			return new AccountResponse(a.getId(), a.getOwner(), a.getCurrency(), a.getCreatedAt());
+		static AccountResponse from(Account a, long balance) {
+			return new AccountResponse(a.getId(), a.getOwner(), a.getCurrency(), balance, a.getCreatedAt());
 		}
 	}
 }
