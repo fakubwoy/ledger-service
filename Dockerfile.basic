@@ -1,0 +1,5 @@
+# Naive baseline for comparison: full JDK, single stage, runs as root.
+FROM eclipse-temurin:17-jdk-noble
+COPY build/libs/*.jar /app.jar
+EXPOSE 8080
+ENTRYPOINT ["java", "-jar", "/app.jar"]

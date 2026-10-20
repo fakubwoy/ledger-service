@@ -1,0 +1,17 @@
+# Same layered build, but the runtime is Canonical's chiselled Ubuntu JRE:
+# only the files the JRE needs, no shell, no package manager, non-root by default (uid 584792, _daemon_).
+FROM eclipse-temurin:17-jre-noble AS extract
+WORKDIR /build
+COPY build/libs/*.jar app.jar
+RUN java -Djarmode=tools -jar app.jar extract --layers --launcher --destination extracted
+
+FROM ubuntu/jre:17-24.04_stable
+WORKDIR /app
+COPY --from=extract /build/extracted/dependencies/ ./
+COPY --from=extract /build/extracted/spring-boot-loader/ ./
+COPY --from=extract /build/extracted/snapshot-dependencies/ ./
+COPY --from=extract /build/extracted/application/ ./
+EXPOSE 8080
+ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=75"
+# No HEALTHCHECK: there is no shell or curl. Orchestrators probe /actuator/health over HTTP instead.
+ENTRYPOINT ["java", "org.springframework.boot.loader.launch.JarLauncher"]
