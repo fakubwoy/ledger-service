@@ -14,6 +14,15 @@ spring:
     # Errors are returned as RFC 7807 application/problem+json.
     problemdetails:
       enabled: true
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      # A new consumer group starts from the oldest event, so a fresh statement view sees full history.
+      auto-offset-reset: earliest
+
+ledger:
+  outbox:
+    poll-interval-ms: 500
 
 management:
   endpoints:

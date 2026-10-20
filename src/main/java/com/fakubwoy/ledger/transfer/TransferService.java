@@ -2,7 +2,11 @@ package com.fakubwoy.ledger.transfer;
 
 import com.fakubwoy.ledger.account.Account;
 import com.fakubwoy.ledger.account.AccountRepository;
+import com.fakubwoy.ledger.outbox.OutboxMessage;
+import com.fakubwoy.ledger.outbox.OutboxRepository;
 import com.fakubwoy.ledger.transfer.LedgerTransaction.Type;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.List;
@@ -17,11 +21,16 @@ public class TransferService {
 	private final AccountRepository accounts;
 	private final LedgerTransactionRepository transactions;
 	private final EntryRepository entries;
+	private final OutboxRepository outbox;
+	private final ObjectMapper json;
 
-	public TransferService(AccountRepository accounts, LedgerTransactionRepository transactions, EntryRepository entries) {
+	public TransferService(AccountRepository accounts, LedgerTransactionRepository transactions, EntryRepository entries,
+			OutboxRepository outbox, ObjectMapper json) {
 		this.accounts = accounts;
 		this.transactions = transactions;
 		this.entries = entries;
+		this.outbox = outbox;
+		this.json = json;
 	}
 
 	public record Posted(UUID transactionId, Type type, UUID fromAccountId, UUID toAccountId, long amount,
@@ -70,7 +79,18 @@ public class TransferService {
 	private Posted post(Type type, UUID fromId, UUID toId, long amount, String currency) {
 		var tx = transactions.save(new LedgerTransaction(type));
 		entries.saveAll(List.of(new Entry(tx.getId(), fromId, -amount), new Entry(tx.getId(), toId, amount)));
+		// Same DB transaction as the entries: the event exists if and only if the money moved.
+		var event = new TransferCompleted(tx.getId(), type, fromId, toId, amount, currency, tx.getCreatedAt());
+		outbox.save(new OutboxMessage(tx.getId(), write(event)));
 		return new Posted(tx.getId(), type, fromId, toId, amount, currency, tx.getCreatedAt());
+	}
+
+	private String write(Object value) {
+		try {
+			return json.writeValueAsString(value);
+		} catch (JsonProcessingException e) {
+			throw new IllegalStateException(e);
+		}
 	}
 
 	private Account find(UUID id) {
