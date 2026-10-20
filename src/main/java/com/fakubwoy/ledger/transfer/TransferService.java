@@ -33,13 +33,15 @@ public class TransferService {
 		if (fromId.equals(toId)) {
 			throw new LedgerException(HttpStatus.BAD_REQUEST, "same-account", "Cannot transfer to the same account");
 		}
-		var from = find(fromId);
-		var to = find(toId);
+		// Holding both row locks until commit makes the balance check and the entry writes one atomic step.
+		var locked = accounts.lockAllById(List.of(fromId, toId));
+		var from = pick(locked, fromId);
+		var to = pick(locked, toId);
 		if (!from.getCurrency().equals(to.getCurrency())) {
 			throw new LedgerException(HttpStatus.UNPROCESSABLE_ENTITY, "currency-mismatch",
 					"Cannot transfer %s to a %s account".formatted(from.getCurrency(), to.getCurrency()));
 		}
-		// ponytail: check-then-write races under concurrent transfers; milestone 5 adds row locking.
+		// READ COMMITTED: this statement sees entries committed by whoever held the lock before us.
 		long balance = entries.balanceOf(fromId);
 		if (balance < amount) {
 			throw new LedgerException(HttpStatus.UNPROCESSABLE_ENTITY, "insufficient-funds",
@@ -72,7 +74,14 @@ public class TransferService {
 	}
 
 	private Account find(UUID id) {
-		return accounts.findById(id).orElseThrow(
-				() -> new LedgerException(HttpStatus.NOT_FOUND, "account-not-found", "Account " + id + " not found"));
+		return accounts.findById(id).orElseThrow(() -> notFound(id));
+	}
+
+	private static Account pick(List<Account> accounts, UUID id) {
+		return accounts.stream().filter(a -> a.getId().equals(id)).findFirst().orElseThrow(() -> notFound(id));
+	}
+
+	private static LedgerException notFound(UUID id) {
+		return new LedgerException(HttpStatus.NOT_FOUND, "account-not-found", "Account " + id + " not found");
 	}
 }
