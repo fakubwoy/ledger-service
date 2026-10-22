@@ -52,6 +52,11 @@ dependencies {
 	testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
+// Version and build time at /actuator/info, so you can tell which build a pod is running.
+springBoot {
+	buildInfo()
+}
+
 // Only the executable Boot jar, so the Dockerfiles can COPY build/libs/*.jar unambiguously.
 tasks.jar {
 	enabled = false
