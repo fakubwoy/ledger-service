@@ -16,6 +16,8 @@ COPY --from=extract /build/extracted/dependencies/ ./
 COPY --from=extract /build/extracted/spring-boot-loader/ ./
 COPY --from=extract /build/extracted/snapshot-dependencies/ ./
 COPY --from=extract /build/extracted/application/ ./
+# OpenTelemetry Java agent: present in the image, only attached when a deployment adds -javaagent (see the Helm chart).
+COPY build/agent/opentelemetry-javaagent.jar /app/opentelemetry-javaagent.jar
 USER app
 EXPOSE 8080
 # Size the heap from the container memory limit instead of the host's RAM.

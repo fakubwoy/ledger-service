@@ -25,6 +25,13 @@ ledger:
     poll-interval-ms: 500
 
 management:
+  metrics:
+    distribution:
+      # Histogram buckets let Prometheus compute p95 and 'share of requests under 300 ms' across all pods.
+      percentiles-histogram:
+        http.server.requests: true
+      slo:
+        http.server.requests: 300ms
   endpoints:
     web:
       exposure:

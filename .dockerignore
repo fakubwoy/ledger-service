@@ -1,3 +1,4 @@
 # The jar is built on the host (./gradlew bootJar); the image only needs that.
 *
 !build/libs/*.jar
+!build/agent/*.jar

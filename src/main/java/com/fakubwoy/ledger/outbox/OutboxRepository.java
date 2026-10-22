@@ -14,5 +14,7 @@ public interface OutboxRepository extends JpaRepository<OutboxMessage, Long> {
 			for update skip locked""", nativeQuery = true)
 	List<OutboxMessage> lockUnpublished(int limit);
 
+	long countByPublishedAtIsNull();
+
 	List<OutboxMessage> findByAggregateId(UUID aggregateId);
 }

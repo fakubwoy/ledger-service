@@ -20,6 +20,8 @@ extra["tomcat.version"] = "10.1.61"
 extra["jackson-bom.version"] = "2.21.8"
 extra["postgresql.version"] = "42.7.14"
 
+val otelAgent by configurations.creating
+
 repositories {
 	mavenCentral()
 }
@@ -37,6 +39,9 @@ dependencies {
 	// Pulled in by kafka-clients, which Boot does not manage for lz4.
 	runtimeOnly("at.yawk.lz4:lz4-java:1.11.4")
 	runtimeOnly("io.micrometer:micrometer-registry-prometheus")
+	// API only: the real implementation comes from the Java agent attached at runtime (see Dockerfile).
+	implementation("io.opentelemetry:opentelemetry-api:1.67.0")
+	otelAgent("io.opentelemetry.javaagent:opentelemetry-javaagent:2.32.0")
 
 	testImplementation("org.springframework.boot:spring-boot-starter-test")
 	testImplementation("org.springframework.boot:spring-boot-testcontainers")
@@ -62,4 +67,11 @@ tasks.jacocoTestReport {
 		xml.required = true
 		html.required = true
 	}
+}
+
+// The Dockerfile cannot download anything, so the agent jar is fetched here and copied next to the Boot jar.
+tasks.register<Copy>("copyOtelAgent") {
+	from(otelAgent)
+	into(layout.buildDirectory.dir("agent"))
+	rename { "opentelemetry-javaagent.jar" }
 }

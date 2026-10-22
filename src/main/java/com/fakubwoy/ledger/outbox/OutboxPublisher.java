@@ -1,6 +1,8 @@
 package com.fakubwoy.ledger.outbox;
 
 import com.fakubwoy.ledger.transfer.TransferCompleted;
+import io.opentelemetry.api.GlobalOpenTelemetry;
+import io.opentelemetry.api.trace.Tracer;
 import java.util.concurrent.TimeUnit;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.springframework.context.annotation.Bean;
@@ -15,6 +17,7 @@ public class OutboxPublisher {
 
 	private final OutboxRepository outbox;
 	private final KafkaTemplate<String, String> kafka;
+	private final Tracer tracer = GlobalOpenTelemetry.getTracer("ledger.outbox");
 
 	public OutboxPublisher(OutboxRepository outbox, KafkaTemplate<String, String> kafka) {
 		this.outbox = outbox;
@@ -34,12 +37,20 @@ public class OutboxPublisher {
 	@Transactional
 	public void publish() throws Exception {
 		var batch = outbox.lockUnpublished(100);
-		var sends = batch.stream()
-				.map(m -> kafka.send(TransferCompleted.TOPIC, m.getAggregateId().toString(), m.getPayload()))
-				.toList();
+		var sends = batch.stream().map(this::send).toList();
 		for (var send : sends) {
 			send.get(10, TimeUnit.SECONDS);
 		}
 		batch.forEach(OutboxMessage::markPublished);
+	}
+
+	// The span is parented on the request that wrote the row, so the Kafka send shows up in that request's trace.
+	private java.util.concurrent.CompletableFuture<?> send(OutboxMessage m) {
+		var span = tracer.spanBuilder("outbox publish").setParent(m.originContext()).startSpan();
+		try (var scope = span.makeCurrent()) {
+			return kafka.send(TransferCompleted.TOPIC, m.getAggregateId().toString(), m.getPayload());
+		} finally {
+			span.end();
+		}
 	}
 }
