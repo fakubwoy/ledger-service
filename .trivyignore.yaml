@@ -1,0 +1,13 @@
+# Accepted findings. Each one says why it does not apply and expires, so CI fails again and forces a re-check.
+# Both are fixed only in Spring Framework 7 (Spring Boot 4); 6.2.19 is the newest 6.2 release on Maven Central.
+vulnerabilities:
+  - id: CVE-2026-47884
+    statement: >-
+      RCE through XsltView. Needs server-side view rendering; this service only has @RestController
+      endpoints and no ViewResolver, XsltView or template engine (checked 2026-10-23).
+    expired_at: 2027-01-31
+  - id: CVE-2026-47890
+    statement: >-
+      Stream corruption in Server-Sent Events with view fragments. This service does not use SSE
+      (no SseEmitter or text/event-stream, checked 2026-10-23).
+    expired_at: 2027-01-31

@@ -46,9 +46,16 @@ jobs:
       - uses: docker/build-push-action@v6
         with:
           context: .
-          push: true
+          load: true   # scanned before it is pushed: a vulnerable image never reaches GHCR or the cluster
           tags: ${{ env.IMAGE }}:${{ steps.tag.outputs.tag }}
           labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
+      - name: trivy image scan
+        # Fails on HIGH/CRITICAL that have a fix. Accepted exceptions, with reasons and expiry: .trivyignore.yaml
+        run: >-
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock -v "$PWD/.trivyignore.yaml:/ignore.yaml:ro"
+          aquasec/trivy:0.69.1 image --severity HIGH,CRITICAL --ignore-unfixed --ignorefile /ignore.yaml --exit-code 1
+          ${{ env.IMAGE }}:${{ steps.tag.outputs.tag }}
+      - run: docker push ${{ env.IMAGE }}:${{ steps.tag.outputs.tag }}
       - name: Bump image tag in ledger-platform
         env:
           DEPLOY_KEY: ${{ secrets.PLATFORM_DEPLOY_KEY }}
