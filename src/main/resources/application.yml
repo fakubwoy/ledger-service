@@ -8,6 +8,10 @@ spring:
     hikari:
       # Fail a request after 5 s when no connection is available (database down), not the 30 s default.
       connection-timeout: 5000
+      # A transfer waiting on a row lock gives up after 5 s (the client retries) instead of holding a pooled
+      # connection for as long as the lock holder lives. Without it, one crashed node's open transactions starved
+      # every other pod's pool on GKE.
+      connection-init-sql: SET lock_timeout = '5s'
   jpa:
     open-in-view: false
     hibernate:
