@@ -5,6 +5,9 @@ spring:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/ledger}
     username: ${DB_USER:ledger}
     password: ${DB_PASSWORD:ledger}
+    hikari:
+      # Fail a request after 5 s when no connection is available (database down), not the 30 s default.
+      connection-timeout: 5000
   jpa:
     open-in-view: false
     hibernate:
@@ -32,6 +35,16 @@ management:
         http.server.requests: true
       slo:
         http.server.requests: 300ms
+  endpoint:
+    health:
+      # Liveness/readiness groups everywhere, not only when Spring detects Kubernetes (tests, local runs).
+      probes:
+        enabled: true
+      group:
+        # Not ready without the database: Kubernetes stops routing to the pod instead of it returning 500s.
+        # Liveness stays independent, so a database outage never restarts pods.
+        readiness:
+          include: readinessState, db
   endpoints:
     web:
       exposure:
