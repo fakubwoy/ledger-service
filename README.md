@@ -136,7 +136,7 @@ Errors are problem+json with a stable `type` that clients can branch on:
 
 ## Container images
 
-Three builds of the same jar, scanned with Trivy 0.75.0 on 2026-10-20. Raw reports are in [results/](results/).
+Three builds of the same jar, scanned with Trivy 0.75.0 on 2026-10-20 (the CI gate pins Trivy 0.69.1). Raw reports are in [results/](results/).
 
 | Image | Base | Size | Runs as | CVEs (critical / high / total) |
 |---|---|--:|---|--:|
@@ -168,6 +168,6 @@ What the numbers show:
 ## Known limits
 
 - Idempotency keys and published outbox rows are never deleted. A cleanup job is needed before real traffic.
-- The outbox poller has no backlog metric yet, and unparseable events are skipped without a dead-letter topic.
+- Unparseable events are skipped without a dead-letter topic. (The outbox backlog is exported as the `ledger.outbox.backlog` gauge.)
 - No authentication. Swagger UI and API docs are on by default and should be disabled in production.
-- There is no lock timeout. A stuck transaction would make others wait on its row locks.
+- Every connection sets `lock_timeout = '5s'`, so a transfer waiting on a stuck row lock fails instead of hanging, but it currently surfaces as a generic 500 rather than a retryable error.
